@@ -161,7 +161,7 @@
 			],
 			stats: [
 				{ cost: '240円', hp: '400', atk: '30', range: '140', speed: '6' },
-				{ cost: '240', hp: '600', atk: '45', range: '140', speed: '6' },
+				{ cost: '240円', hp: '600', atk: '45', range: '140', speed: '6' },
 				{ cost: '240円', hp: '900', atk: '70', range: '140', speed: '7' }
 			],
 			color: '#f43f5e',
@@ -396,8 +396,8 @@
 				'魔王の力を手に入れ漆黒に染まった巨大要塞。画面全体を揺るがす破壊光線で敵城ごと消し飛ばすにゃ！'
 			],
 			stats: [
-				{ cost: '750円', hp: '800', atk: '350', range: '320', speed: '9' }, // cheap form!
-				{ cost: '3750円', hp: '6000', atk: '2500', range: '450', speed: '5' }, // giant fort!
+				{ cost: '750円', hp: '800', atk: '350', range: '320', speed: '9' },
+				{ cost: '3750円', hp: '6000', atk: '2500', range: '450', speed: '5' },
 				{ cost: '3750円', hp: '9500', atk: '4200', range: '450', speed: '5' }
 			],
 			color: '#ca8a04',
@@ -439,12 +439,12 @@
 			descriptions: [
 				'超古代兵器とされる伝説のドラゴン。動きは非常に遅いが、超射程から全てを消滅させる玉を放つにゃ。',
 				'狂乱に陥った破滅のネコムート。エネルギー波を放ち、広域範囲攻撃でボス以外の雑魚を全滅させるにゃ。',
-				'ついに本来のスピードと力を覚醒させた姿。超高速（スピード32）で突撃し、超破壊乱舞を繰り出すにゃ！'
+				'ついに本来의スピードと力を覚醒させた姿。超高速（スピード32）で突撃し、超破壊乱舞を繰り出すにゃ！'
 			],
 			stats: [
 				{ cost: '4500円', hp: '5000', atk: '3200', range: '450', speed: '5' },
 				{ cost: '4500円', hp: '6800', atk: '4800', range: '450', speed: '5' },
-				{ cost: '4500円', hp: '8500', atk: '6500', range: '140', speed: '32' } // Speed 32, range shortens to melee!
+				{ cost: '4500円', hp: '8500', atk: '6500', range: '140', speed: '32' }
 			],
 			color: '#7c3aed',
 			svgPaths: [
@@ -455,7 +455,7 @@
 		}
 	];
 
-	// Stages setup (Japan Chapter)
+	// Stages Setup (Japan Chapter)
 	const stages = [
 		{
 			id: 'shizuoka',
@@ -544,11 +544,28 @@
 	let allies = $state([]);
 	let enemies = $state([]);
 
-	// Cooldown map that keeps track of spawn recharge
+	// Cat Cannon state
+	let cannonCharge = $state(0); // 0 to 100
+	let cannonLaserActive = $state(false);
+	let battlefieldShake = $state(false);
+	let cannonReady = $derived(cannonCharge >= 100);
+
+	// Cooldown map
 	let cooldowns = $state({});
 	cats.forEach(c => {
 		cooldowns[c.id] = 0;
 	});
+
+	const walletLevels = [
+		{ max: 300, speed: 1.5, upgradeCost: 100 },
+		{ max: 500, speed: 2.5, upgradeCost: 200 },
+		{ max: 800, speed: 4.0, upgradeCost: 350 },
+		{ max: 1200, speed: 6.0, upgradeCost: 550 },
+		{ max: 1800, speed: 9.0, upgradeCost: 850 },
+		{ max: 2500, speed: 13.0, upgradeCost: 1250 },
+		{ max: 3500, speed: 18.0, upgradeCost: 1800 },
+		{ max: 5000, speed: 25.0, upgradeCost: null } // level 8 max
+	];
 
 	let walletMax = $derived(walletLevels[walletLevel - 1].max);
 	let walletSpeed = $derived(walletLevels[walletLevel - 1].speed);
@@ -571,7 +588,7 @@
 		}, 600);
 	}
 
-	// Toggle a character in/out of the Battle Deck
+	// Toggle character deck registration
 	function toggleDeck(catId) {
 		if (battleDeck.includes(catId)) {
 			if (battleDeck.length === 1) {
@@ -597,7 +614,7 @@
 		}, 1500);
 	}
 
-	// Game Engine Spawning and Logic
+	// Game Engine Loop
 	function startGame() {
 		gameStatus = 'playing';
 		money = 0;
@@ -609,6 +626,7 @@
 		enemies = [];
 		bossSpawned = false;
 		showBossWarning = false;
+		cannonCharge = 0; // reset cannon charge
 		
 		// Reset cooldowns
 		cats.forEach(c => {
@@ -632,21 +650,24 @@
 			// 1. Generate money
 			money = Math.min(money + walletSpeed, walletMax);
 
-			// 2. Reduce cooldowns
+			// 2. Charge Cat Cannon
+			cannonCharge = Math.min(100, cannonCharge + 0.25); // takes 16 seconds to fully charge
+
+			// 3. Reduce cooldowns
 			let nextCooldowns = { ...cooldowns };
 			for (let key in nextCooldowns) {
 				nextCooldowns[key] = Math.max(0, nextCooldowns[key] - 0.04);
 			}
 			cooldowns = nextCooldowns;
 
-			// 3. Auto enemy spawner
+			// 4. Stage-based auto enemy spawner
 			if (ticks % activeStage.spawnFrequency === 0) {
 				const eligibleEnemies = activeStage.enemyList;
 				const randEnemy = eligibleEnemies[Math.floor(Math.random() * eligibleEnemies.length)];
 				spawnEnemy(randEnemy);
 			}
 
-			// 4. Boss trigger logic (Iriomote Island - Castle HP below 50%)
+			// 5. Boss trigger logic
 			if (activeStage.boss && enemyCastleHp <= (enemyCastleMaxHp / 2) && !bossSpawned) {
 				bossSpawned = true;
 				showBossWarning = true;
@@ -656,7 +677,7 @@
 				spawnBoss(activeStage.boss);
 			}
 
-			// 5. Update combat and movement physics
+			// 6. Update combat and movement physics
 			updateEntities();
 		}, 40);
 	}
@@ -672,7 +693,6 @@
 		money -= cost;
 		cooldowns[cat.id] = getCooldownTime(cat.id);
 
-		// Special stats adjustment for Kasa Jizo/Bahamut depending on Evolved/True forms
 		let finalRange = getRangePercent(cat.id, form);
 		let finalSpeed = getSpeedPercent(cat.id, form);
 
@@ -785,6 +805,38 @@
 		enemies = [...enemies, newBoss];
 	}
 
+	// Fire the Cat Cannon!
+	function fireCatCannon() {
+		if (cannonCharge < 100) return;
+		
+		cannonCharge = 0;
+		cannonLaserActive = true;
+		battlefieldShake = true;
+
+		// Deal massive damage & knockback to all active enemies
+		enemies = enemies.map(e => {
+			let updated = { ...e };
+			updated.hp -= 320; // Laser damage
+			updated.x = Math.min(88, e.x + 10); // Knockback 10%
+			updated.hitEffect = true;
+
+			setTimeout(() => {
+				const found = enemies.find(oe => oe.id === e.id);
+				if (found) found.hitEffect = false;
+			}, 250);
+
+			return updated;
+		});
+
+		setTimeout(() => {
+			cannonLaserActive = false;
+		}, 550);
+
+		setTimeout(() => {
+			battlefieldShake = false;
+		}, 400);
+	}
+
 	function getCooldownTime(catId) {
 		if (catId === 'cat') return 2;
 		if (catId === 'tank') return 4;
@@ -799,7 +851,7 @@
 		if (catId === 'archer' || catId === 'rover' || catId === 'stilts' || catId === 'gunman') return 8;
 
 		// Uber Rare cooldowns
-		if (catId === 'jizo') return 6.5; // Kasa jizo is super spammy in normal!
+		if (catId === 'jizo') return 6.5; 
 		if (catId === 'valkyrie') return 35;
 		if (catId === 'bahamut') return 65;
 		return 8;
@@ -820,7 +872,7 @@
 		if (catId === 'jura') return 4.5;
 		if (catId === 'wheel') return 8;
 		if (catId === 'witch') return 12;
-		if (catId === 'archer') return 22; // Archer Cat range
+		if (catId === 'archer') return 22;
 		if (catId === 'rover') return 4.5;
 		if (catId === 'stilts') return 8;
 		if (catId === 'gunman') return 14;
@@ -828,7 +880,7 @@
 		// Uber ranges
 		if (catId === 'jizo') return form === 0 ? 15 : 28;
 		if (catId === 'valkyrie') return 16;
-		if (catId === 'bahamut') return form === 2 ? 6 : 25; // Bahamut melee in awakened!
+		if (catId === 'bahamut') return form === 2 ? 6 : 25; 
 		return 5;
 	}
 
@@ -837,7 +889,7 @@
 		if (catId === 'cat') base = 0.55;
 		if (catId === 'tank') base = 0.4;
 		if (catId === 'gross') base = 0.5;
-		if (catId === 'cow') base = 1.3; // Cow is fast
+		if (catId === 'cow') base = 1.3;
 		if (catId === 'bird') base = 0.45;
 		if (catId === 'titan') base = 0.32;
 
@@ -856,7 +908,7 @@
 		// Uber speeds
 		if (catId === 'jizo') base = form === 0 ? 0.6 : 0.38;
 		if (catId === 'valkyrie') base = 1.1;
-		if (catId === 'bahamut') base = form === 2 ? 2.2 : 0.3; // Awakened Bahamut is speed 32!
+		if (catId === 'bahamut') base = form === 2 ? 2.2 : 0.3;
 
 		if (form === 2 && catId !== 'bahamut' && catId !== 'cow') base *= 1.25; 
 		return base;
@@ -879,16 +931,13 @@
 				if (updated.attackTimer >= 800) {
 					updated.attackTimer = 0;
 
-					// Apply combat damage
 					if (ally.isArea) {
-						// Area damage to all enemies in range
 						enemies.forEach(e => {
 							if (e.x > ally.x && (e.x - ally.x) <= ally.range) {
 								applyDamageToEnemy(e, ally);
 							}
 						});
 					} else {
-						// Single target damage
 						const targetEnemy = enemies.find(e => e.id === target.id);
 						if (targetEnemy) {
 							applyDamageToEnemy(targetEnemy, ally);
@@ -933,7 +982,7 @@
 						targetAlly.hp -= enemy.atk;
 						targetAlly.hitEffect = true;
 						
-						// Survive fatal hit once (Hop Skill)
+						// Survive once (Hop)
 						if (targetAlly.hp <= 0 && targetAlly.survive && !targetAlly.hasSurvived) {
 							targetAlly.hp = 1;
 							targetAlly.hasSurvived = true;
@@ -963,7 +1012,6 @@
 			return updated;
 		});
 
-		// C. Sync and Filter dead elements
 		allies = nextAllies.filter(a => a.hp > 0);
 		enemies = nextEnemies.filter(e => {
 			if (e.hp <= 0) {
@@ -976,7 +1024,6 @@
 	function applyDamageToEnemy(enemyObj, attacker) {
 		let finalDamage = attacker.atk;
 		
-		// 1. Critical strike skill check (Jurassic Cat)
 		if (attacker.critChance && Math.random() < attacker.critChance) {
 			finalDamage *= 3;
 		}
@@ -984,17 +1031,17 @@
 		enemyObj.hp -= finalDamage;
 		enemyObj.hitEffect = true;
 
-		// 2. Slow down target skill check (Witch / Gunslinger)
+		// Slow Down
 		if (attacker.slowChance && Math.random() < attacker.slowChance && !enemyObj.isBoss) {
 			const originalSpeed = enemyObj.speed;
-			enemyObj.speed *= 0.35; // major speed reduction
+			enemyObj.speed *= 0.35;
 			setTimeout(() => {
 				const found = enemies.find(e => e.id === enemyObj.id);
 				if (found) found.speed = originalSpeed;
 			}, 2000);
 		}
 
-		// 3. Double Money drop on death (Thief Cat)
+		// Double money
 		if (enemyObj.hp <= 0) {
 			let bonus = enemyObj.value;
 			if (attacker.doubleMoney) bonus *= 2.0;
@@ -1017,7 +1064,7 @@
 </svelte:head>
 
 <main class="min-h-screen flex flex-col justify-between p-4 md:p-8 relative overflow-hidden">
-	<!-- Background grid graphics -->
+	<!-- Background grid -->
 	<div class="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none"></div>
 	<div class="absolute -top-40 -right-40 w-96 h-96 bg-blue-500 rounded-full blur-3xl opacity-20 pointer-events-none"></div>
 	<div class="absolute -bottom-40 -left-40 w-96 h-96 bg-purple-500 rounded-full blur-3xl opacity-20 pointer-events-none"></div>
@@ -1052,7 +1099,7 @@
 	{/if}
 
 	{#if currentMode === 'encyclopedia'}
-		<!-- 図鑑モード (ENCYCLOPEDIA) -->
+		<!-- ENCYCLOPEDIA -->
 		<header class="relative text-center py-4">
 			<h1 class="text-3xl md:text-5xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-amber-300 to-yellow-500 drop-shadow-lg">
 				にゃんこ大戦争
@@ -1062,13 +1109,12 @@
 			</p>
 		</header>
 
-		<!-- Main Catalog Grid (Sidebar + Showcase) -->
+		<!-- Catalog Selection Grid -->
 		<div class="relative w-full max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 my-auto z-10">
-			
-			<!-- Left Column: Filter and Roster selection -->
+			<!-- Left: filters -->
 			<div class="lg:col-span-5 flex flex-col gap-4">
 				<div class="bg-slate-950/40 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-xl flex flex-col">
-					<!-- Rarity filtering tabs -->
+					<!-- Rarity Tab controls -->
 					<div class="grid grid-cols-3 gap-1.5 bg-black/40 p-1 rounded-xl mb-4 text-center">
 						<button
 							onclick={() => { activeRarityTab = 'basic'; }}
@@ -1093,7 +1139,6 @@
 						</button>
 					</div>
 
-					<!-- Scrollable Character Grid -->
 					<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-2 max-h-[380px] overflow-y-auto pr-1">
 						{#each cats as cat, i}
 							{#if cat.rarity === activeRarityTab}
@@ -1117,7 +1162,7 @@
 					</div>
 				</div>
 
-				<!-- Deck Toggle/Registration Box -->
+				<!-- Deck customizer -->
 				<div class="bg-slate-950/40 border border-white/10 rounded-2xl p-4 shadow-xl space-y-3">
 					<h3 class="text-xs font-bold text-slate-300">⚔️ このキャラクターを編成に登録</h3>
 					<div class="flex items-center justify-between gap-4">
@@ -1141,13 +1186,12 @@
 				</div>
 			</div>
 
-			<!-- Right Column: Character Showcase card & stats -->
+			<!-- Right: Showcase & Stats -->
 			<div class="lg:col-span-7 flex flex-col gap-6">
-				<!-- Big Showcase Box -->
 				<div class="relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 shadow-2xl overflow-hidden flex flex-col sm:flex-row gap-6 items-center">
 					<div class="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-blue-400/40 to-transparent"></div>
 
-					<!-- Visual Cat Area -->
+					<!-- Visual Cat -->
 					<div class="w-48 h-48 flex-shrink-0 bg-slate-950/60 rounded-2xl border border-white/10 flex items-center justify-center relative p-4 group">
 						<div 
 							class="absolute w-32 h-32 rounded-full blur-2xl opacity-40 transition-colors duration-500"
@@ -1169,7 +1213,7 @@
 						</span>
 					</div>
 
-					<!-- Info & Action -->
+					<!-- Info -->
 					<div class="flex-1 space-y-4 text-center sm:text-left w-full">
 						<div>
 							<span class="inline-block text-[9px] font-bold tracking-widest uppercase px-2 py-0.5 rounded mb-2
@@ -1197,7 +1241,7 @@
 							{activeCat.descriptions[catForms[selectedIndex]]}
 						</p>
 
-						<!-- Evolve Trigger -->
+						<!-- Evolve -->
 						<button
 							onclick={evolveCat}
 							disabled={isEvolving}
@@ -1213,7 +1257,7 @@
 					</div>
 				</div>
 
-				<!-- Stats Box -->
+				<!-- Stats -->
 				<div class="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-xl">
 					<div class="flex justify-between items-center mb-4">
 						<h3 class="text-xs font-bold text-slate-300 flex items-center gap-2">
@@ -1248,7 +1292,7 @@
 		</div>
 
 	{:else}
-		<!-- 戦闘シミュレーター (BATTLE SIMULATOR) -->
+		<!-- SIMULATOR -->
 		<header class="relative text-center py-2">
 			<h1 class="text-3xl md:text-5xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-rose-400 to-amber-500 drop-shadow-lg">
 				戦闘シミュレーター
@@ -1260,9 +1304,7 @@
 
 		<div class="relative w-full max-w-6xl mx-auto z-10 flex flex-col gap-6 my-auto">
 			{#if gameStatus === 'idle'}
-				<!-- Pre-battle layout: Stage selection and active deck configuration -->
 				<div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
-					
 					<!-- Left: Stage selection (5 cols) -->
 					<div class="lg:col-span-5 bg-slate-950/40 backdrop-blur-xl border border-white/10 rounded-3xl p-5 shadow-2xl flex flex-col">
 						<h2 class="text-xs font-bold text-slate-400 mb-4 px-1 uppercase tracking-wider">
@@ -1301,7 +1343,6 @@
 								</p>
 							</div>
 
-							<!-- Enemies detailed list -->
 							<div class="bg-white/5 p-3 rounded-xl border border-white/5 space-y-1.5">
 								<span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">出現敵キャラクター</span>
 								<div class="flex flex-wrap gap-2">
@@ -1318,7 +1359,7 @@
 								</div>
 							</div>
 
-							<!-- Active Spawning Deck -->
+							<!-- Active Deck -->
 							<div class="space-y-2">
 								<div class="flex justify-between items-center">
 									<span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">戦闘デッキメンバー ({battleDeck.length}/10)</span>
@@ -1337,7 +1378,6 @@
 											<span class="text-[8px] font-bold text-slate-300 truncate w-full text-center mt-1">{dCat.names[catForms[dIdx]]}</span>
 										</div>
 									{/each}
-									<!-- Render empty slot icons -->
 									{#each Array(Math.max(0, 10 - battleDeck.length)) as _}
 										<div class="flex items-center justify-center border border-dashed border-white/10 rounded-lg text-slate-600 text-xs">
 											➕
@@ -1360,19 +1400,9 @@
 				<!-- ACTIVE GAME SCREEN -->
 				<div class="bg-slate-950/40 backdrop-blur-xl border border-white/10 rounded-3xl p-4 shadow-2xl relative">
 					
-					<!-- Boss Warning overlay visual -->
-					{#if showBossWarning}
-						<div class="absolute inset-0 bg-red-600/10 border-4 border-red-600 animate-pulse pointer-events-none z-40 flex items-center justify-center rounded-3xl">
-							<div class="bg-red-950/95 text-white font-black text-xl md:text-3xl px-6 py-4 rounded-2xl border-2 border-red-500 shadow-2xl uppercase tracking-wider text-center animate-bounce">
-								⚠️ BOSS APPEARED! ⚠️
-								<span class="block text-xs font-bold text-red-200 mt-1.5">強敵「カオル君」が出現したにゃ！</span>
-							</div>
-						</div>
-					{/if}
-
-					<!-- Castle HP status row -->
+					<!-- Castle HP Headers -->
 					<div class="flex justify-between items-center mb-4 px-2">
-						<!-- Ally Castle HP -->
+						<!-- Ally Castle -->
 						<div class="w-2/5 max-w-[200px]">
 							<div class="flex justify-between text-[10px] font-bold text-slate-300 mb-1">
 								<span class="text-blue-400">味方城</span>
@@ -1387,7 +1417,7 @@
 							{activeStage.name}
 						</span>
 
-						<!-- Enemy Castle HP -->
+						<!-- Enemy Castle -->
 						<div class="w-2/5 max-w-[200px]">
 							<div class="flex justify-between text-[10px] font-bold text-slate-300 mb-1">
 								<span class="text-red-400">敵城</span>
@@ -1399,10 +1429,9 @@
 						</div>
 					</div>
 
-					<!-- Battlefield strip track -->
-					<div class="w-full h-64 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-800 rounded-2xl relative overflow-hidden border border-white/5 shadow-inner">
-						
-						<!-- Night Stars decoration -->
+					<!-- Field Strip with optional shake -->
+					<div class="w-full h-64 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-800 rounded-2xl relative overflow-hidden border border-white/5 shadow-inner {battlefieldShake ? 'shake-field' : ''}">
+						<!-- Night Stars -->
 						<div class="absolute top-4 left-10 w-1 h-1 bg-white rounded-full opacity-60 animate-pulse"></div>
 						<div class="absolute top-10 left-1/3 w-1.5 h-1.5 bg-white rounded-full opacity-40"></div>
 						<div class="absolute top-6 right-1/4 w-1 h-1 bg-white rounded-full opacity-80 animate-pulse"></div>
@@ -1412,7 +1441,7 @@
 							<div class="w-full h-full bg-[linear-gradient(90deg,transparent_50%,rgba(0,0,0,0.15)_50%)] bg-[size:16px_100%] opacity-30"></div>
 						</div>
 
-						<!-- Ally Castle -->
+						<!-- Ally Castle visual -->
 						<div class="absolute left-[5%] bottom-10 w-20 h-20 transform -translate-x-1/2 translate-y-1.5 select-none pointer-events-none">
 							<svg viewBox="0 0 120 120" class="w-full h-full">
 								<polygon points="20,40 30,10 45,35" fill="#e2e8f0" stroke="#1e293b" stroke-width="4.5" stroke-linejoin="round" />
@@ -1425,7 +1454,7 @@
 							</svg>
 						</div>
 
-						<!-- Enemy Castle -->
+						<!-- Enemy Castle visual -->
 						<div class="absolute right-[5%] bottom-10 w-20 h-20 transform translate-x-1/2 translate-y-1.5 select-none pointer-events-none">
 							<svg viewBox="0 0 120 120" class="w-full h-full">
 								<rect x="25" y="25" width="70" height="85" rx="8" fill="#1e1b4b" stroke="#1e293b" stroke-width="4.5" />
@@ -1437,7 +1466,7 @@
 							</svg>
 						</div>
 
-						<!-- Allies Renders -->
+						<!-- Allies -->
 						{#each allies as ally (ally.id)}
 							<div
 								class="absolute z-20 flex items-end justify-center transition-[left] duration-75 select-none pointer-events-none
@@ -1446,7 +1475,6 @@
 									width: {ally.type === 'bahamut' && ally.form !== 2 ? '70px' : '44px'}; 
 									height: {ally.type === 'bahamut' && ally.form !== 2 ? '70px' : '44px'};"
 							>
-								<!-- Small HP bar -->
 								<div class="absolute -top-3 w-8 h-1 bg-slate-900 border border-white/10 rounded overflow-hidden">
 									<div class="h-full bg-emerald-500" style="width: {(ally.hp / ally.maxHp) * 100}%"></div>
 								</div>
@@ -1456,7 +1484,7 @@
 							</div>
 						{/each}
 
-						<!-- Enemies Renders -->
+						<!-- Enemies -->
 						{#each enemies as enemy (enemy.id)}
 							<div
 								class="absolute z-20 flex items-end justify-center transition-[left] duration-75 select-none pointer-events-none
@@ -1472,12 +1500,22 @@
 								</div>
 							</div>
 						{/each}
+
+						<!-- Laser Overlay Visual Sweep -->
+						{#if cannonLaserActive}
+							<div class="absolute inset-x-0 bottom-12 h-6 bg-cyan-400/80 blur-[1px] z-30 animate-laser-beam flex items-center">
+								<div class="h-2.5 bg-white w-full"></div>
+							</div>
+						{/if}
 					</div>
 
-					<!-- Wallet & Spawner Cards Layout -->
+					<!-- Wallet, Cannon, and Production controllers -->
 					<div class="grid grid-cols-1 lg:grid-cols-12 gap-4 mt-6">
-						<!-- Wallet controller (4 cols) -->
+						
+						<!-- Left Side: Wallet + Cannon upgrade (4 cols) -->
 						<div class="lg:col-span-4 bg-slate-900/60 rounded-2xl p-4 border border-white/5 flex flex-col justify-between gap-3">
+							
+							<!-- Wallet display -->
 							<div class="space-y-1">
 								<span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">所持金</span>
 								<div class="flex items-baseline justify-between">
@@ -1489,23 +1527,37 @@
 								</div>
 							</div>
 
-							<button
-								onclick={upgradeWallet}
-								disabled={walletLevel >= 8 || money < (walletLevels[walletLevel - 1].upgradeCost || 0)}
-								class="w-full py-2.5 rounded-xl border border-yellow-500/20 bg-yellow-500/10 hover:bg-yellow-500/20 disabled:bg-slate-900/40 disabled:border-white/5 disabled:opacity-40 text-yellow-400 disabled:text-slate-500 font-bold text-xs transition duration-200 cursor-pointer flex justify-center items-center gap-1"
-							>
-								{#if walletLevel >= 8}
-									🐱 働きネコ Lv.MAX
-								{:else}
-									💸 働きネコ Lv.{walletLevel} ➔ Lv.{walletLevel+1}
-									<span class="font-mono bg-yellow-500/20 px-1.5 py-0.5 rounded ml-1">
-										-{walletLevels[walletLevel - 1].upgradeCost}円
+							<!-- Buttons Group -->
+							<div class="grid grid-cols-2 gap-2 mt-2">
+								<button
+									onclick={upgradeWallet}
+									disabled={walletLevel >= 8 || money < (walletLevels[walletLevel - 1].upgradeCost || 0)}
+									class="py-3 rounded-xl border border-yellow-500/20 bg-yellow-500/10 hover:bg-yellow-500/20 disabled:bg-slate-900/40 disabled:border-white/5 disabled:opacity-40 text-yellow-400 disabled:text-slate-500 font-bold text-[10px] transition duration-200 cursor-pointer flex flex-col items-center justify-center gap-0.5"
+								>
+									<span>💸 働きネコ Lv.{walletLevel}</span>
+									{#if walletLevel < 8}
+										<span class="text-[9px] opacity-75">-{walletLevels[walletLevel - 1].upgradeCost}円</span>
+									{/if}
+								</button>
+
+								<!-- CAT CANNON BUTTON -->
+								<button
+									onclick={fireCatCannon}
+									disabled={!cannonReady}
+									class="py-3 rounded-xl border font-bold text-[10px] transition duration-200 cursor-pointer flex flex-col items-center justify-center gap-0.5
+										{cannonReady
+											? 'bg-cyan-500 border-cyan-400 text-slate-950 shadow-lg shadow-cyan-500/20 animate-pulse'
+											: 'bg-slate-900/40 border-white/5 text-slate-500 opacity-55'}"
+								>
+									<span>⚡ にゃんこ砲</span>
+									<span class="text-[9px] font-mono">
+										{cannonReady ? '発射可能！' : `${Math.floor(cannonCharge)}%`}
 									</span>
-								{/if}
-							</button>
+								</button>
+							</div>
 						</div>
 
-						<!-- Spawn card deck tray (8 cols) -->
+						<!-- Right Side: Spawner Deck Tray (8 cols) -->
 						<div class="lg:col-span-8 bg-slate-900/40 rounded-2xl p-4 border border-white/5">
 							<span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-3">出撃にゃんこ生産 (登録順)</span>
 							<div class="grid grid-cols-5 gap-2">
@@ -1560,7 +1612,7 @@
 			{/if}
 		</div>
 
-		<!-- Victory & defeat modal overlays -->
+		<!-- Victory & Defeat overlays -->
 		{#if gameStatus === 'victory'}
 			<div class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in">
 				<div class="bg-slate-900 border border-yellow-500/20 rounded-3xl p-8 max-w-sm text-center shadow-2xl space-y-5 border-t-[4px] border-t-yellow-400 animate-scale-up">
@@ -1681,6 +1733,47 @@
 		}
 	}
 
+	@keyframes laser-beam-glow {
+		0% {
+			height: 0;
+			opacity: 0;
+		}
+		15% {
+			height: 30px;
+			opacity: 1;
+			filter: brightness(1.4);
+		}
+		85% {
+			height: 22px;
+			opacity: 0.95;
+		}
+		100% {
+			height: 0;
+			opacity: 0;
+		}
+	}
+
+	@keyframes screen-shake {
+		0%, 100% {
+			transform: translate(0, 0);
+		}
+		10%, 90% {
+			transform: translate(-2px, 2px);
+		}
+		20%, 80% {
+			transform: translate(2px, -2px);
+		}
+		30%, 70% {
+			transform: translate(-3px, -1px);
+		}
+		40%, 60% {
+			transform: translate(3px, 1px);
+		}
+		50% {
+			transform: translate(-1px, 3px);
+		}
+	}
+
 	.evolving-effect {
 		animation: evolve-glow 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 	}
@@ -1699,5 +1792,13 @@
 
 	.hit-effect {
 		animation: hit-flash 0.2s ease-out;
+	}
+
+	.animate-laser-beam {
+		animation: laser-beam-glow 0.55s ease-out forwards;
+	}
+
+	.shake-field {
+		animation: screen-shake 0.4s ease-in-out;
 	}
 </style>
