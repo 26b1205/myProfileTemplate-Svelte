@@ -1,4 +1,15 @@
 @import 'tailwindcss';
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
 
 @plugin '@tailwindcss/forms';
 @plugin '@tailwindcss/typography';
+
+body {
+	background: radial-gradient(circle at 50% 0%, #1d4ed8 0%, #1e3a8a 50%, #0f172a 100%);
+	color: #f8fafc;
+	min-height: 100vh;
+	margin: 0;
+	font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+}
+
+
